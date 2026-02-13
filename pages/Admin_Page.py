@@ -10,9 +10,11 @@ from code.db_helpers import (
     get_db_connection, # Важный импорт, который был пропущен
     get_table_names, get_records, global_search_records, 
     get_record_by_id, update_record, delete_record, get_all_tags, 
-    add_new_tag, update_tag, delete_tag, get_image_as_base64
+    add_new_tag, update_tag, delete_tag, get_image_as_base64, BASE_DIR
 )
 from code.i18n import t, language_selector
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Настройка страницы и CSS ---
 st.set_page_config(page_title=t('sidebar_admin'), page_icon="⚙️", layout="wide")
@@ -76,7 +78,7 @@ else:
             if record:
                 with st.form(key=f"edit_form_{record['rowid']}"):
                     st.subheader(f"{t('edit_form_title')} `{record['Путь']}`")
-                    if record['Фото'] and os.path.exists(record['Фото']):
+                    if record['Фото'] and os.path.exists(os.path.join(BASE_DIR, record['Фото'])):
                         b64_image = get_image_as_base64(record['Фото'])
                         if b64_image: st.markdown(f'<div class="edit-img-container"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
                     comment = st.text_area(t('edit_form_comment'), record['Комментарий'] or "")
@@ -91,7 +93,7 @@ else:
                             table_name = editing_info['table']; table_img_dir = os.path.join('img', table_name)
                             os.makedirs(table_img_dir, exist_ok=True)
                             filename = f"{record['rowid']}_{uploaded_file.name}".replace('\\','_').replace('/','_'); photo_path = os.path.join(table_img_dir, filename)
-                            with open(photo_path, "wb") as f: f.write(uploaded_file.getbuffer())
+                            with open(os.path.join(PROJECT_ROOT, photo_path), "wb") as f: f.write(uploaded_file.getbuffer())
                         update_record(editing_info['table'], record['rowid'], comment, tags_to_save, photo_path)
                         st.session_state.editing_record_info = None; st.rerun()
                     if cancel.form_submit_button(t('cancel_button')):
@@ -118,7 +120,7 @@ else:
                 deleting_info = st.session_state.get('deleting_record_info')
                 for r in records_to_display:
                     row_cols = st.columns([2, 5, 2, 3, 2, 1, 1]); row_cols[0].write(r['source_table']); row_cols[1].markdown(f"`{r['Путь']}`"); row_cols[2].write(r['Подфайл'] or ''); row_cols[3].write(r['Комментарий'] or '')
-                    if r['Фото'] and os.path.exists(r['Фото']):
+                    if r['Фото'] and os.path.exists(os.path.join(BASE_DIR, r['Фото'])):
                         b64_image = get_image_as_base64(r['Фото'])
                         if b64_image: row_cols[4].markdown(f'<div class="img-container-admin"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
                     else: row_cols[4].markdown('<div class="img-container-admin">---</div>', unsafe_allow_html=True)

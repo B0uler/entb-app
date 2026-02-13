@@ -1,6 +1,8 @@
 import sqlite3
 import os
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 DB_FILE = 'app.db'
 
 def get_db_connection():
@@ -91,7 +93,10 @@ def update_record(table_name, rowid, comment, tags, photo_path):
 
 def delete_record(table_name, rowid):
     record = get_record_by_id(table_name, rowid)
-    if record and record['Фото'] and os.path.exists(record['Фото']): os.remove(record['Фото'])
+    if record and record['Фото']:
+        full_image_path = os.path.join(BASE_DIR, record['Фото'])
+        if os.path.exists(full_image_path):
+            os.remove(full_image_path)
     with get_db_connection() as conn: conn.cursor().execute(f'DELETE FROM "{table_name}" WHERE rowid = ?', (rowid,)); conn.commit()
 
 def get_all_tags():
@@ -108,8 +113,9 @@ def delete_tag(tag_id):
 
 def get_image_as_base64(path):
     import base64
+    full_image_path = os.path.join(BASE_DIR, path)
     try:
-        with open(path, "rb") as f:
+        with open(full_image_path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
     except Exception:

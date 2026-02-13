@@ -4,7 +4,7 @@ import sys
 
 # --- Импорты и настройка пути ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-from code.db_helpers import init_db, get_all_tags, search_public, get_image_as_base64
+from code.db_helpers import init_db, get_all_tags, search_public, get_image_as_base64, BASE_DIR
 from code.i18n import t, language_selector
 from code.auth import check_password, add_user
 
@@ -86,7 +86,7 @@ if search_results:
         row_cols[1].markdown(f"`{r['Путь']}`")
         row_cols[2].write(r['Подфайл'] or '')
         row_cols[3].write(r['Комментарий'] or '')
-        if r['Фото'] and os.path.exists(r['Фото']):
+        if r['Фото'] and os.path.exists(os.path.join(BASE_DIR, r['Фото'])):
             b64_image = get_image_as_base64(r['Фото'])
             if b64_image:
                 row_cols[4].markdown(f'<div class="img-container"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
