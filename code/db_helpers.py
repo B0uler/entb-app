@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import streamlit as st
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -143,6 +144,7 @@ def update_user(username, new_name=None, new_admin_status=None, new_username=Non
 def delete_user(username):
     with get_db_connection() as conn: conn.cursor().execute("DELETE FROM users WHERE username = ?", (username,)); conn.commit()
 
+@st.cache_data
 def get_image_as_base64(path):
     import base64
     full_image_path = os.path.join(BASE_DIR, path)
