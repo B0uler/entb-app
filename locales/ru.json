@@ -41,6 +41,7 @@
     "edit_form_photo": "Загрузить/заменить фото",
     "save_button": "Сохранить",
     "cancel_button": "Отмена",
+    "detach_button": "Открепить",
     "tag_management_title": "Управление тэгами",
     "create_new_tag_subheader": "Создать новый тэг",
     "tag_name_label": "Название тега",

@@ -41,6 +41,7 @@
     "edit_form_photo": "Upload/replace photo",
     "save_button": "Save",
     "cancel_button": "Cancel",
+    "detach_button": "Detach",
     "tag_management_title": "Tag Management",
     "create_new_tag_subheader": "Create a new tag",
     "tag_name_label": "Tag name",

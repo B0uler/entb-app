@@ -116,130 +116,6 @@ def user_management_tab():
                     st.rerun()
         st.divider()
 
-
-def file_manager_tab():
-    st.header(t('file_manager_title'))
-
-    if 'current_path' not in st.session_state:
-        st.session_state.current_path = IMG_DIR
-    if 'show_create_dialog' not in st.session_state:
-        st.session_state.show_create_dialog = False
-    if 'show_upload' not in st.session_state:
-        st.session_state.show_upload = False
-    if 'selected_items' not in st.session_state:
-        st.session_state.selected_items = []
-    if 'action_mode' not in st.session_state:
-        st.session_state.action_mode = "normal" # normal, copy, move
-
-    st.write(f"**Current path:** `{st.session_state.current_path}`")
-    
-    # --- Actions ---
-    cols = st.columns(6)
-    if cols[0].button("..", help="Up"):
-        if st.session_state.current_path != IMG_DIR:
-            st.session_state.current_path = os.path.dirname(st.session_state.current_path)
-            st.rerun()
-
-    if cols[1].button("➕", help="Create"):
-        st.session_state.show_create_dialog = not st.session_state.show_create_dialog
-
-    if cols[2].button("📤", help="Upload"):
-        st.session_state.show_upload = not st.session_state.show_upload
-        
-    if cols[3].button("📋", help="Copy"):
-        st.session_state.action_mode = "copy"
-        
-    if cols[4].button("✂️", help="Move"):
-        st.session_state.action_mode = "move"
-
-    if st.session_state.action_mode in ["copy", "move"]:
-        st.info(f"Select a destination folder for the {st.session_state.action_mode} operation.")
-        if cols[5].button("Cancel"):
-            st.session_state.action_mode = "normal"
-            st.rerun()
-
-    # --- Create Dialog ---
-    if st.session_state.show_create_dialog:
-        with st.form("create_dialog"):
-            create_type = st.radio(t('create_dialog_type'), (t('create_dialog_folder'), t('create_dialog_file')))
-            name = st.text_input(t('create_dialog_name'))
-            c1, c2 = st.columns(2)
-            if c1.form_submit_button(t('create_button')):
-                if name:
-                    if create_type == t('create_dialog_folder'):
-                        os.makedirs(os.path.join(st.session_state.current_path, name), exist_ok=True)
-                    elif create_type == t('create_dialog_file'):
-                        with open(os.path.join(st.session_state.current_path, name), 'w') as f:
-                            f.write("")
-                    st.session_state.show_create_dialog = False
-                    st.rerun()
-            if c2.form_submit_button(t('cancel_button')):
-                st.session_state.show_create_dialog = False
-                st.rerun()
-
-    # --- Upload UI ---
-    if st.session_state.show_upload:
-        with st.form("upload_file_form", clear_on_submit=True):
-            uploaded_files = st.file_uploader("Choose a file", accept_multiple_files=True)
-            if st.form_submit_button(t('upload_button')):
-                for uploaded_file in uploaded_files:
-                    with open(os.path.join(st.session_state.current_path, uploaded_file.name), "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                st.session_state.show_upload = False
-                st.rerun()
-
-    # --- File/Folder Listing ---
-    items = os.listdir(st.session_state.current_path)
-    
-    new_selected_items = []
-
-    for item in items:
-        item_path = os.path.join(st.session_state.current_path, item)
-        col1, col2, col3, col4 = st.columns([1, 4, 1, 1])
-        
-        is_selected = col1.checkbox("", key=f"check_{item}", value=(item in st.session_state.selected_items))
-        if is_selected:
-            new_selected_items.append(item)
-        
-        icon = "📁" if os.path.isdir(item_path) else "📄"
-        
-        if col2.button(f"{icon} {item}", key=f"item_{item}"):
-            if st.session_state.action_mode in ["copy", "move"]:
-                if os.path.isdir(item_path):
-                    for selected_item in st.session_state.selected_items:
-                        src_path = os.path.join(st.session_state.current_path, selected_item)
-                        dst_path = os.path.join(item_path, selected_item)
-                        if st.session_state.action_mode == "copy":
-                            if os.path.isdir(src_path):
-                                shutil.copytree(src_path, dst_path)
-                            else:
-                                shutil.copy(src_path, dst_path)
-                        elif st.session_state.action_mode == "move":
-                            shutil.move(src_path, dst_path)
-                    st.session_state.selected_items = []
-                    st.session_state.action_mode = "normal"
-                    st.rerun()
-            else:
-                if os.path.isdir(item_path):
-                    st.session_state.current_path = item_path
-                    st.rerun()
-
-        if col3.button(t('edit_button'), key=f"edit_item_{item}"):
-            new_name = st.text_input("New name", value=item, key=f"new_name_{item}")
-            if st.button("Save", key=f"save_item_{item}"):
-                 os.rename(item_path, os.path.join(st.session_state.current_path, new_name))
-                 st.rerun()
-
-        if col4.button(t('delete_button'), key=f"delete_item_{item}"):
-            if os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-            else:
-                os.remove(item_path)
-            st.rerun()
-
-    st.session_state.selected_items = new_selected_items
-
-
 # --- 3. Боковая панель ---
 language_selector()
 if st.session_state.get('authenticated'):
@@ -253,7 +129,7 @@ if not st.session_state.get('authenticated'):
 elif not st.session_state.get('is_admin'):
     st.error(t('permission_denied'))
 else: 
-    tab1, tab2, tab3, tab4 = st.tabs([t('tab_records'), t('tab_tags'), t('tab_user_management'), t('tab_file_manager')])
+    tab1, tab2, tab3 = st.tabs([t('tab_records'), t('tab_tags'), t('tab_user_management')])
     with tab1:
         editing_info = st.session_state.get('editing_record_info')
         if editing_info:
@@ -263,13 +139,18 @@ else:
                     st.subheader(f"{t('edit_form_title')} `{record['Путь']}`")
                     if record['Фото'] and os.path.exists(os.path.join(BASE_DIR, record['Фото'])):
                         b64_image = get_image_as_base64(record['Фото'])
-                        if b64_image: st.markdown(f'<div class="edit-img-container"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
+                        if b64_image: 
+                            st.markdown(f'<div class="edit-img-container"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
+                    
                     comment = st.text_area(t('edit_form_comment'), record['Комментарий'] or "")
-                    all_tags_suggestions = get_all_tags(); current_tags = record['tags'].split(',') if record['tags'] else []
+                    all_tags_suggestions = get_all_tags()
+                    current_tags = record['tags'].split(',') if record['tags'] else []
                     current_tags = [tag.strip() for tag in current_tags if tag.strip()]
                     selected_tags = st.multiselect(t('edit_form_tags'), options=all_tags_suggestions, default=current_tags)
                     uploaded_file = st.file_uploader(t('edit_form_photo'))
-                    save, cancel = st.columns(2)
+
+                    save, detach, cancel = st.columns(3)
+
                     if save.form_submit_button(t('save_button')):
                         tags_to_save = ",".join(selected_tags)
                         photo_path = record['Фото']
@@ -284,77 +165,139 @@ else:
                         update_record(editing_info['table'], record['rowid'], comment, tags_to_save, photo_path)
                         st.session_state.editing_record_info = None
                         st.rerun()
+
+                    if detach.form_submit_button(t('detach_button')):
+                        update_record(editing_info['table'], record['rowid'], comment, record['tags'], '')
+                        st.session_state.editing_record_info = None
+                        st.rerun()
+                        
                     if cancel.form_submit_button(t('cancel_button')):
                         st.session_state.editing_record_info = None; st.rerun()
         else:
             st.header(t('tab_records'))
-            c1, c2 = st.columns([1, 2]); table_options = [t('all_tables')] + get_table_names()
+            c1, c2 = st.columns([1, 2])
+            table_options = [t('all_tables')] + get_table_names()
             sel_table_idx = table_options.index(st.session_state.get('selected_table', t('all_tables'))) if st.session_state.get('selected_table', t('all_tables')) in table_options else 0
             selected_table = c1.selectbox(t('table_header_table'), table_options, index=sel_table_idx)
             search_query = c2.text_input(t('search_by_path'), st.session_state.get('search_query', ''))
             if selected_table != st.session_state.get('selected_table') or search_query != st.session_state.get('search_query'):
-                st.session_state.update({'selected_table': selected_table, 'search_query': search_query, 'current_page': 1}); st.rerun()
+                st.session_state.update({'selected_table': selected_table, 'search_query': search_query, 'current_page': 1})
+                st.rerun()
+
             all_records = []
             if selected_table == t('all_tables'):
-                if search_query: all_records = global_search_records(search_query)
-                else: st.info(t('enter_query_global_search'))
-            else: all_records = get_records(selected_table, search_query)
+                if search_query:
+                    all_records = global_search_records(search_query)
+                else:
+                    st.info(t('enter_query_global_search'))
+            else:
+                all_records = get_records(selected_table, search_query)
+
             if all_records:
-                total_records = len(all_records); total_pages = max(1, (total_records + RECORDS_PER_PAGE - 1) // RECORDS_PER_PAGE); current_page = st.session_state.get('current_page', 1); current_page = min(current_page, total_pages); st.session_state.current_page = current_page
-                start_idx, end_idx = (current_page - 1) * RECORDS_PER_PAGE, current_page * RECORDS_PER_PAGE
+                total_records = len(all_records)
+                total_pages = max(1, (total_records + RECORDS_PER_PAGE - 1) // RECORDS_PER_PAGE)
+                current_page = st.session_state.get('current_page', 1)
+                current_page = min(current_page, total_pages)
+                st.session_state.current_page = current_page
+
+                start_idx = (current_page - 1) * RECORDS_PER_PAGE
+                end_idx = current_page * RECORDS_PER_PAGE
                 records_to_display = all_records[start_idx:end_idx]
+
                 st.write(f"{t('records_found')} {total_records}")
-                cols = st.columns([2, 5, 2, 3, 2, 1, 1]); cols[0].subheader(t('table_header_table')); cols[1].subheader(t('table_header_path')); cols[2].subheader(t('table_header_subfile')); cols[3].subheader(t('table_header_comment')); cols[4].subheader(t('table_header_photo'))
+                cols = st.columns([2, 5, 2, 3, 2, 1, 1])
+                cols[0].subheader(t('table_header_table'))
+                cols[1].subheader(t('table_header_path'))
+                cols[2].subheader(t('table_header_subfile'))
+                cols[3].subheader(t('table_header_comment'))
+                cols[4].subheader(t('table_header_photo'))
+
                 deleting_info = st.session_state.get('deleting_record_info')
                 for r in records_to_display:
-                    row_cols = st.columns([2, 5, 2, 3, 2, 1, 1]); row_cols[0].write(r['source_table']); row_cols[1].markdown(f"`{r['Путь']}`"); row_cols[2].write(r['Подфайл'] or ''); row_cols[3].write(r['Комментарий'] or '')
+                    row_cols = st.columns([2, 5, 2, 3, 2, 1, 1])
+                    row_cols[0].write(r['source_table'])
+                    row_cols[1].markdown(f"`{r['Путь']}`")
+                    row_cols[2].write(r['Подфайл'] or '')
+                    row_cols[3].write(r['Комментарий'] or '')
+
                     if r['Фото'] and os.path.exists(os.path.join(BASE_DIR, r['Фото'])):
                         b64_image = get_image_as_base64(r['Фото'])
-                        if b64_image: row_cols[4].markdown(f'<div class="img-container-admin"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
-                    else: row_cols[4].markdown('<div class="img-container-admin">---</div>', unsafe_allow_html=True)
+                        if b64_image:
+                            row_cols[4].markdown(f'<div class="img-container-admin"><img src="data:image/png;base64,{b64_image}"></div>', unsafe_allow_html=True)
+                    else:
+                        row_cols[4].markdown('<div class="img-container-admin">---</div>', unsafe_allow_html=True)
+
                     if deleting_info and deleting_info['rowid'] == r['rowid']:
-                        row_cols[5].write(t('are_you_sure')); 
+                        row_cols[5].write(t('are_you_sure')) 
                         if row_cols[6].button(t('confirm_delete_button'), key=f"del_confirm_{r['rowid']}"):
-                            delete_record(deleting_info['table'], deleting_info['rowid']); st.session_state.deleting_record_info = None; st.rerun()
+                            delete_record(deleting_info['table'], deleting_info['rowid'])
+                            st.session_state.deleting_record_info = None
+                            st.rerun()
                     else:
                         if row_cols[5].button(t('edit_button'), key=f"edit_{r['rowid']}"):
-                            st.session_state.editing_record_info = {'table': r['source_table'], 'rowid': r['rowid']}; st.rerun()
+                            st.session_state.editing_record_info = {'table': r['source_table'], 'rowid': r['rowid']}
+                            st.rerun()
                         if row_cols[6].button(t('delete_button'), key=f"del_{r['rowid']}"):
-                            st.session_state.deleting_record_info = {'table': r['source_table'], 'rowid': r['rowid']}; st.rerun()
+                            st.session_state.deleting_record_info = {'table': r['source_table'], 'rowid': r['rowid']}
+                            st.rerun()
                 st.divider()
                 p1,p2,p3 = st.columns([3,1,3]);
                 if p1.button(t('pagination_prev'), disabled=current_page<=1): st.session_state.current_page-=1; st.rerun()
                 p2.write(f"{t('pagination_page')} {current_page} {t('pagination_of')} {total_pages}")
                 if p3.button(t('pagination_next'), disabled=current_page>=total_pages): st.session_state.current_page+=1; st.rerun()
+
     with tab2:
         st.header(t('tag_management_title'))
         with st.form("add_tag_form", clear_on_submit=True):
-            st.subheader(t('create_new_tag_subheader')); new_tag_name = st.text_input(t('tag_name_label')); new_tag_desc = st.text_area(t('tag_desc_label'))
+            st.subheader(t('create_new_tag_subheader'))
+            new_tag_name = st.text_input(t('tag_name_label'))
+            new_tag_desc = st.text_area(t('tag_desc_label'))
             if st.form_submit_button(t('create_button')):
                 if new_tag_name:
-                    try: add_new_tag(new_tag_name, new_tag_desc); st.success(t('tag_create_success').format(tag_name=new_tag_name))
-                    except sqlite3.IntegrityError: st.error(t('tag_create_error_exists').format(tag_name=new_tag_name))
-                else: st.warning(t('tag_create_error_empty'))
+                    try:
+                        add_new_tag(new_tag_name, new_tag_desc)
+                        st.success(t('tag_create_success').format(tag_name=new_tag_name))
+                    except sqlite3.IntegrityError:
+                        st.error(t('tag_create_error_exists').format(tag_name=new_tag_name))
+                else:
+                    st.warning(t('tag_create_error_empty'))
         st.divider()
-        tag_records = [];
-        with get_db_connection() as conn: tag_records = conn.cursor().execute("SELECT id, name, description FROM tags ORDER BY name").fetchall()
+
+        tag_records = []
+        with get_db_connection() as conn:
+            tag_records = conn.cursor().execute("SELECT id, name, description FROM tags ORDER BY name").fetchall()
+        
         st.subheader(f"{t('existing_tags_subheader')} ({len(tag_records)})")
         for tag in tag_records:
             if st.session_state.get('editing_tag_id') == tag['id']:
                 with st.form(key=f"edit_tag_{tag['id']}"):
-                    edited_name = st.text_input(t('tag_name_label'), value=tag['name']); edited_desc = st.text_area(t('tag_desc_label'), value=tag['description'] or "")
+                    edited_name = st.text_input(t('tag_name_label'), value=tag['name'])
+                    edited_desc = st.text_area(t('tag_desc_label'), value=tag['description'] or "")
                     c1, c2 = st.columns(2)
-                    if c1.form_submit_button(t('save_button')): update_tag(tag['id'], edited_name, edited_desc); st.session_state.editing_tag_id = None; st.rerun()
-                    if c2.form_submit_button(t('cancel_button')): st.session_state.editing_tag_id = None; st.rerun()
+                    if c1.form_submit_button(t('save_button')):
+                        update_tag(tag['id'], edited_name, edited_desc)
+                        st.session_state.editing_tag_id = None
+                        st.rerun()
+                    if c2.form_submit_button(t('cancel_button')):
+                        st.session_state.editing_tag_id = None
+                        st.rerun()
             else:
-                c1, c2, c3, c4 = st.columns([2, 4, 1, 1]); c1.write(f"**{tag['name']}**"); c2.write(tag['description'] or "---")
-                if c3.button(t('edit_button'), key=f"edit_tag_{tag['id']}"): st.session_state.editing_tag_id = tag['id']; st.rerun()
+                c1, c2, c3, c4 = st.columns([2, 4, 1, 1])
+                c1.write(f"**{tag['name']}**")
+                c2.write(tag['description'] or "---")
+                if c3.button(t('edit_button'), key=f"edit_tag_{tag['id']}"):
+                    st.session_state.editing_tag_id = tag['id']
+                    st.rerun()
                 if st.session_state.get('deleting_tag_id') == tag['id']:
-                    if c4.button(t('confirm_delete_button'), key=f"del_confirm_tag_{tag['id']}"): delete_tag(tag['id']); st.session_state.deleting_tag_id = None; st.rerun()
+                    if c4.button(t('confirm_delete_button'), key=f"del_confirm_tag_{tag['id']}"):
+                        delete_tag(tag['id'])
+                        st.session_state.deleting_tag_id = None
+                        st.rerun()
                 else:
-                    if c4.button(t('delete_button'), key=f"del_tag_{tag['id']}"): st.session_state.deleting_tag_id = {'table': 'tags', 'id': tag['id']}; st.rerun()
+                    if c4.button(t('delete_button'), key=f"del_tag_{tag['id']}"):
+                        st.session_state.deleting_tag_id = {'table': 'tags', 'id': tag['id']}
+                        st.rerun()
             st.divider()
+
     with tab3:
         user_management_tab()
-    with tab4:
-        file_manager_tab()
