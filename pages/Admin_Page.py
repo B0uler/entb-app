@@ -2,19 +2,22 @@ import streamlit as st
 import sqlite3
 import os
 import sys
+import shutil
 
 # --- Импорты ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from code.auth import check_password, add_user
+from code.auth import check_password, add_user, update_user, delete_user
 from code.db_helpers import (
-    get_db_connection, # Важный импорт, который был пропущен
+    get_db_connection, 
     get_table_names, get_records, global_search_records, 
     get_record_by_id, update_record, delete_record, get_all_tags, 
-    add_new_tag, update_tag, delete_tag, get_image_as_base64, BASE_DIR
+    add_new_tag, update_tag, delete_tag, get_image_as_base64, BASE_DIR,
+    get_all_users
 )
 from code.i18n import t, language_selector
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+IMG_DIR = os.path.join(PROJECT_ROOT, 'img')
 
 # --- Настройка страницы и CSS ---
 st.set_page_config(page_title=t('sidebar_admin'), page_icon="⚙️", layout="wide")
@@ -46,16 +49,196 @@ def login_form():
                 st.session_state.update({'authenticated': True, 'username': username, 'name': user_name, 'is_admin': is_admin}); st.rerun()
             else: st.error(t('login_form_error'))
 
-def register_form():
-    st.header(t('register_form_title'))
-    with st.form("Register", clear_on_submit=True):
-        new_username, new_password = st.text_input(t('register_form_username')), st.text_input(t('register_form_new_password'), type="password")
-        confirm_password = st.text_input(t('register_form_confirm_password')); new_name = st.text_input(t('register_form_display_name'))
+def user_management_tab():
+    st.header(t('user_management_title'))
+
+    # Форма для добавления нового пользователя
+    with st.form("add_user_form", clear_on_submit=True):
+        st.subheader(t('register_form_title'))
+        new_username = st.text_input(t('register_form_username'))
+        new_password = st.text_input(t('register_form_new_password'), type="password")
+        confirm_password = st.text_input(t('register_form_confirm_password'), type="password")
+        new_name = st.text_input(t('register_form_display_name'))
         is_admin_checkbox = st.checkbox(t('register_form_is_admin'))
         if st.form_submit_button(t('register_button')):
             if new_password and new_password == confirm_password:
-                add_user(new_username, new_password, new_name, 1 if is_admin_checkbox else 0); st.success(t('register_success'))
-            else: st.error(t('register_error_password_mismatch'))
+                try:
+                    add_user(new_username, new_password, new_name, 1 if is_admin_checkbox else 0)
+                    st.success(t('register_success'))
+                except sqlite3.IntegrityError:
+                    st.error(f"User '{new_username}' already exists.")
+            else:
+                st.error(t('register_error_password_mismatch'))
+
+    st.divider()
+
+    # Отображение существующих пользователей
+    st.subheader(t('existing_users_subheader'))
+    users = get_all_users()
+    for user in users:
+        if st.session_state.get('editing_user_username') == user['username']:
+            with st.form(key=f"edit_user_{user['username']}"):
+                st.write(f"**{t('editing_user_form_title')}: {user['username']}**")
+                edited_username = st.text_input(t('register_form_username'), value=user['username'])
+                edited_name = st.text_input(t('register_form_display_name'), value=user['name'])
+                edited_password = st.text_input(t('register_form_new_password'), type="password")
+                edited_is_admin = st.checkbox(t('register_form_is_admin'), value=bool(user['admin']))
+                c1, c2 = st.columns(2)
+                if c1.form_submit_button(t('save_button')):
+                    update_user(
+                        username=user['username'],
+                        new_username=edited_username,
+                        new_name=edited_name,
+                        new_password=edited_password if edited_password else None,
+                        new_admin_status=1 if edited_is_admin else 0
+                    )
+                    st.session_state.editing_user_username = None
+                    st.rerun()
+                if c2.form_submit_button(t('cancel_button')):
+                    st.session_state.editing_user_username = None
+                    st.rerun()
+        else:
+            c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 1, 1])
+            c1.write(user['username'])
+            c2.write(user['name'])
+            c3.write("✔️" if user['admin'] else "❌")
+            if c4.button(t('edit_button'), key=f"edit_user_{user['username']}"):
+                st.session_state.editing_user_username = user['username']
+                st.rerun()
+            if st.session_state.get('deleting_user_username') == user['username']:
+                 if c5.button(t('confirm_delete_button'), key=f"del_confirm_user_{user['username']}"):
+                    delete_user(user['username'])
+                    st.session_state.deleting_user_username = None
+                    st.rerun()
+            else:
+                if c5.button(t('delete_button'), key=f"del_user_{user['username']}"):
+                    st.session_state.deleting_user_username = user['username']
+                    st.rerun()
+        st.divider()
+
+
+def file_manager_tab():
+    st.header(t('file_manager_title'))
+
+    if 'current_path' not in st.session_state:
+        st.session_state.current_path = IMG_DIR
+    if 'show_create_dialog' not in st.session_state:
+        st.session_state.show_create_dialog = False
+    if 'show_upload' not in st.session_state:
+        st.session_state.show_upload = False
+    if 'selected_items' not in st.session_state:
+        st.session_state.selected_items = []
+    if 'action_mode' not in st.session_state:
+        st.session_state.action_mode = "normal" # normal, copy, move
+
+    st.write(f"**Current path:** `{st.session_state.current_path}`")
+    
+    # --- Actions ---
+    cols = st.columns(6)
+    if cols[0].button("..", help="Up"):
+        if st.session_state.current_path != IMG_DIR:
+            st.session_state.current_path = os.path.dirname(st.session_state.current_path)
+            st.rerun()
+
+    if cols[1].button("➕", help="Create"):
+        st.session_state.show_create_dialog = not st.session_state.show_create_dialog
+
+    if cols[2].button("📤", help="Upload"):
+        st.session_state.show_upload = not st.session_state.show_upload
+        
+    if cols[3].button("📋", help="Copy"):
+        st.session_state.action_mode = "copy"
+        
+    if cols[4].button("✂️", help="Move"):
+        st.session_state.action_mode = "move"
+
+    if st.session_state.action_mode in ["copy", "move"]:
+        st.info(f"Select a destination folder for the {st.session_state.action_mode} operation.")
+        if cols[5].button("Cancel"):
+            st.session_state.action_mode = "normal"
+            st.rerun()
+
+    # --- Create Dialog ---
+    if st.session_state.show_create_dialog:
+        with st.form("create_dialog"):
+            create_type = st.radio(t('create_dialog_type'), (t('create_dialog_folder'), t('create_dialog_file')))
+            name = st.text_input(t('create_dialog_name'))
+            c1, c2 = st.columns(2)
+            if c1.form_submit_button(t('create_button')):
+                if name:
+                    if create_type == t('create_dialog_folder'):
+                        os.makedirs(os.path.join(st.session_state.current_path, name), exist_ok=True)
+                    elif create_type == t('create_dialog_file'):
+                        with open(os.path.join(st.session_state.current_path, name), 'w') as f:
+                            f.write("")
+                    st.session_state.show_create_dialog = False
+                    st.rerun()
+            if c2.form_submit_button(t('cancel_button')):
+                st.session_state.show_create_dialog = False
+                st.rerun()
+
+    # --- Upload UI ---
+    if st.session_state.show_upload:
+        with st.form("upload_file_form", clear_on_submit=True):
+            uploaded_files = st.file_uploader("Choose a file", accept_multiple_files=True)
+            if st.form_submit_button(t('upload_button')):
+                for uploaded_file in uploaded_files:
+                    with open(os.path.join(st.session_state.current_path, uploaded_file.name), "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                st.session_state.show_upload = False
+                st.rerun()
+
+    # --- File/Folder Listing ---
+    items = os.listdir(st.session_state.current_path)
+    
+    new_selected_items = []
+
+    for item in items:
+        item_path = os.path.join(st.session_state.current_path, item)
+        col1, col2, col3, col4 = st.columns([1, 4, 1, 1])
+        
+        is_selected = col1.checkbox("", key=f"check_{item}", value=(item in st.session_state.selected_items))
+        if is_selected:
+            new_selected_items.append(item)
+        
+        icon = "📁" if os.path.isdir(item_path) else "📄"
+        
+        if col2.button(f"{icon} {item}", key=f"item_{item}"):
+            if st.session_state.action_mode in ["copy", "move"]:
+                if os.path.isdir(item_path):
+                    for selected_item in st.session_state.selected_items:
+                        src_path = os.path.join(st.session_state.current_path, selected_item)
+                        dst_path = os.path.join(item_path, selected_item)
+                        if st.session_state.action_mode == "copy":
+                            if os.path.isdir(src_path):
+                                shutil.copytree(src_path, dst_path)
+                            else:
+                                shutil.copy(src_path, dst_path)
+                        elif st.session_state.action_mode == "move":
+                            shutil.move(src_path, dst_path)
+                    st.session_state.selected_items = []
+                    st.session_state.action_mode = "normal"
+                    st.rerun()
+            else:
+                if os.path.isdir(item_path):
+                    st.session_state.current_path = item_path
+                    st.rerun()
+
+        if col3.button(t('edit_button'), key=f"edit_item_{item}"):
+            new_name = st.text_input("New name", value=item, key=f"new_name_{item}")
+            if st.button("Save", key=f"save_item_{item}"):
+                 os.rename(item_path, os.path.join(st.session_state.current_path, new_name))
+                 st.rerun()
+
+        if col4.button(t('delete_button'), key=f"delete_item_{item}"):
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+            else:
+                os.remove(item_path)
+            st.rerun()
+
+    st.session_state.selected_items = new_selected_items
+
 
 # --- 3. Боковая панель ---
 language_selector()
@@ -70,7 +253,7 @@ if not st.session_state.get('authenticated'):
 elif not st.session_state.get('is_admin'):
     st.error(t('permission_denied'))
 else: 
-    tab1, tab2, tab3 = st.tabs([t('tab_records'), t('tab_tags'), t('tab_register')])
+    tab1, tab2, tab3, tab4 = st.tabs([t('tab_records'), t('tab_tags'), t('tab_user_management'), t('tab_file_manager')])
     with tab1:
         editing_info = st.session_state.get('editing_record_info')
         if editing_info:
@@ -88,14 +271,19 @@ else:
                     uploaded_file = st.file_uploader(t('edit_form_photo'))
                     save, cancel = st.columns(2)
                     if save.form_submit_button(t('save_button')):
-                        tags_to_save = ",".join(selected_tags); photo_path = record['Фото']
+                        tags_to_save = ",".join(selected_tags)
+                        photo_path = record['Фото']
                         if uploaded_file:
-                            table_name = editing_info['table']; table_img_dir = os.path.join('img', table_name)
-                            os.makedirs(table_img_dir, exist_ok=True)
-                            filename = f"{record['rowid']}_{uploaded_file.name}".replace('\\','_').replace('/','_'); photo_path = os.path.join(table_img_dir, filename)
-                            with open(os.path.join(PROJECT_ROOT, photo_path), "wb") as f: f.write(uploaded_file.getbuffer())
+                            destination_dir = os.path.dirname(record['Путь'])
+                            full_destination_dir = os.path.join(IMG_DIR, destination_dir)
+                            os.makedirs(full_destination_dir, exist_ok=True)
+                            photo_path = os.path.join('img', destination_dir, uploaded_file.name)
+                            full_photo_path = os.path.join(PROJECT_ROOT, photo_path)
+                            with open(full_photo_path, "wb") as f:
+                                f.write(uploaded_file.getbuffer())
                         update_record(editing_info['table'], record['rowid'], comment, tags_to_save, photo_path)
-                        st.session_state.editing_record_info = None; st.rerun()
+                        st.session_state.editing_record_info = None
+                        st.rerun()
                     if cancel.form_submit_button(t('cancel_button')):
                         st.session_state.editing_record_info = None; st.rerun()
         else:
@@ -167,4 +355,6 @@ else:
                     if c4.button(t('delete_button'), key=f"del_tag_{tag['id']}"): st.session_state.deleting_tag_id = {'table': 'tags', 'id': tag['id']}; st.rerun()
             st.divider()
     with tab3:
-        register_form()
+        user_management_tab()
+    with tab4:
+        file_manager_tab()

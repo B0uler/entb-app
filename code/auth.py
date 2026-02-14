@@ -1,5 +1,5 @@
 import bcrypt
-from code.db_helpers import get_db_connection
+from code.db_helpers import get_db_connection, update_user as db_update_user, delete_user as db_delete_user, get_user_by_username
 
 def hash_password(password):
     """Хеширует пароль."""
@@ -21,3 +21,12 @@ def check_password(username, password):
         if bcrypt.checkpw(password.encode('utf-8'), hashed_password_db.encode('utf-8')):
             return True, name, bool(admin_status)
     return False, None, False
+
+def update_user(username, new_name=None, new_admin_status=None, new_username=None, new_password=None):
+    """Обновляет информацию о пользователе."""
+    hashed_password = hash_password(new_password) if new_password else None
+    db_update_user(username, new_name=new_name, new_admin_status=new_admin_status, new_username=new_username, new_password=hashed_password)
+
+def delete_user(username):
+    """Удаляет пользователя."""
+    db_delete_user(username)

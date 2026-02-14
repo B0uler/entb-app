@@ -111,6 +111,38 @@ def update_tag(tag_id, new_name, new_description):
 def delete_tag(tag_id):
     with get_db_connection() as conn: conn.cursor().execute("DELETE FROM tags WHERE id = ?", (tag_id,)); conn.commit()
 
+def get_all_users():
+    with get_db_connection() as conn: return conn.cursor().execute("SELECT rowid, username, name, admin FROM users").fetchall()
+
+def get_user_by_username(username):
+    with get_db_connection() as conn:
+        return conn.cursor().execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+
+def update_user(username, new_name=None, new_admin_status=None, new_username=None, new_password=None):
+    with get_db_connection() as conn:
+        updates = []
+        params = []
+        if new_name is not None:
+            updates.append("name = ?")
+            params.append(new_name)
+        if new_admin_status is not None:
+            updates.append("admin = ?")
+            params.append(new_admin_status)
+        if new_username is not None:
+            updates.append("username = ?")
+            params.append(new_username)
+        if new_password is not None:
+            updates.append("password = ?")
+            params.append(new_password)
+        
+        if updates:
+            params.append(username)
+            conn.cursor().execute(f"UPDATE users SET {', '.join(updates)} WHERE username = ?", tuple(params))
+            conn.commit()
+
+def delete_user(username):
+    with get_db_connection() as conn: conn.cursor().execute("DELETE FROM users WHERE username = ?", (username,)); conn.commit()
+
 def get_image_as_base64(path):
     import base64
     full_image_path = os.path.join(BASE_DIR, path)

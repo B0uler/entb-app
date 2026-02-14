@@ -76,7 +76,7 @@ if search_results:
     st.write(f"{t('records_found')} {total_records}")
     st.divider()
 
-    cols = st.columns([2, 5, 1, 3, 2, 2])
+    cols = st.columns([2, 4, 2, 3, 2, 2])
     cols[0].subheader(t('table_header_table')); cols[1].subheader(t('table_header_path')); cols[2].subheader(t('table_header_subfile'))
     cols[3].subheader(t('table_header_comment')); cols[4].subheader(t('table_header_photo')); cols[5].subheader(t('table_header_tags'))
 
